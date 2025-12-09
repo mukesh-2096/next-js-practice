@@ -1,0 +1,32 @@
+# Node modules and build output
+node_modules
+npm-debug.log
+yarn-error.log
+.next
+dist
+build
+out
+
+# Environment files (never copy secrets into Docker image)
+.env
+.env.*
+*.env
+
+# Git files
+.git
+.gitignore
+.gitattributes
+
+# Docker files
+Dockerfile
+docker-compose.yml
+
+# OS / Editor files
+.DS_Store
+.vscode
+.idea
+*.swp
+
+# Logs
+logs
+*.log

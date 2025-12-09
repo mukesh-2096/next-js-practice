@@ -126,3 +126,70 @@ This completes the assignment for **Advanced Data Fetching and Rendering in the 
 Isolating configuration per environment keeps releases predictable: staging can surface configuration issues without risking production, and production stays locked to vetted secrets and endpoints. This separation also simplifies compliance reviews because sensitive data is never committed and every deployment documents exactly which secret source it depends on.
 
 ---
+
+## **Understanding Cloud Deployments: Docker → CI/CD → AWS/Azure**
+
+### **Containerizing the App**
+
+I introduced a multi-stage `Dockerfile` that compiles the Next.js app in an isolated builder image and ships a slim runtime image. Pairing it with `.dockerignore` keeps large or sensitive files out of the build context so local caches, logs, and `.env.*` never reach the image layer.
+
+```
+FROM node:18-alpine AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+RUN npm run build
+
+FROM node:18-alpine
+WORKDIR /app
+COPY --from=builder /app .
+EXPOSE 3000
+CMD ["npm", "start"]
+```
+
+### **Automating Builds with CI/CD**
+
+GitHub Actions can orchestrate build ➜ test ➜ deploy once a branch merges. The snippet below shows the key steps: checkout, install, run the staging build (to catch config drift), and finally publish the production-ready image. Secrets like `AWS_ACCESS_KEY_ID` or `AZURE_CREDENTIALS` remain in the repository's Secret store and surface as environment variables only inside the workflow.
+
+```yaml
+name: deploy
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+      - run: npm ci
+      - run: npm run build:staging
+      - name: Build production image
+        run: docker build -t my-app:latest .
+      - name: Push to registry
+        run: |
+          echo "${{ secrets.REGISTRY_PASSWORD }}" | docker login ${{ secrets.REGISTRY_URL }} -u ${{ secrets.REGISTRY_USERNAME }} --password-stdin
+          docker tag my-app:latest ${{ secrets.REGISTRY_URL }}/my-app:latest
+          docker push ${{ secrets.REGISTRY_URL }}/my-app:latest
+```
+
+### **Deploying to AWS & Azure**
+
+* **AWS:** Push the image to ECR, then run it on ECS Fargate or Elastic Beanstalk. Provision load balancers and networking once, then let ECS pull the latest tag on deployment.
+* **Azure:** Publish the image to Azure Container Registry and hook it to Azure App Service for Containers or Azure Container Apps. App Service can auto-pull images based on deployment slots so staging and production stay isolated.
+
+In both clouds, environment variables map through their respective service settings. When a pipeline promotes the artifact, it selects staging or production secrets accordingly.
+
+### **Secrets & Configuration**
+
+`dotenv-cli` and the `.env.*` convention cover local development. In the cloud, those values live in managed stores (GitHub Secrets, AWS SSM Parameter Store, Azure Key Vault) and are injected at runtime. No secret leaves those vaults or lands in git, keeping compliance auditors happy.
+
+### **Reflection**
+
+Learning Docker demanded the most iterations—understanding why multi-stage builds reduce attack surface was a lightbulb moment. CI/CD felt smoother once the pipeline enforced staging builds before shipping production images. Next time I want to automate infrastructure provisioning with Terraform or Bicep so environment creation is as repeatable as the builds themselves.
+
+---
