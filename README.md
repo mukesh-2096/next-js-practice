@@ -100,3 +100,29 @@ This project demonstrates:
 This completes the assignment for **Advanced Data Fetching and Rendering in the Next.js App Router**.
 
 ---
+
+## **Environment-Aware Builds & Secret Handling**
+
+### **Build Targets**
+
+* `npm run build:staging` loads `.env.staging` via `dotenv-cli` before running `next build` so the bundle points at staging services.
+* `npm run build:production` loads `.env.production` (also used by the default `npm run build`) ensuring production URLs are injected at build time.
+* Local development keeps using Next.js defaults, automatically reading `.env.development` when `npm run dev` starts.
+
+### **Secret Management Workflow**
+
+* Only `.env.example` is committed; `.env.development`, `.env.staging`, and `.env.production` stay ignored to prevent accidental secret leaks.
+* Real credentials live in managed secret stores (e.g. GitHub Actions secrets, AWS SSM Parameter Store, Azure Key Vault) and are injected during CI/CD pipelines rather than stored in git.
+* CI jobs select the right environment file or secret scope (staging vs production) before invoking the corresponding build script.
+
+### **Verification Checklist**
+
+1. Populate each `.env.*` file locally from `.env.example` placeholders or load values from your secret manager at runtime.
+2. Run `npm run build:staging` and confirm staging deployments reach the staging API/database targets.
+3. Run `npm run build:production` and confirm the production build references production services only.
+
+### **Why Multi-Environment Pipelines Matter**
+
+Isolating configuration per environment keeps releases predictable: staging can surface configuration issues without risking production, and production stays locked to vetted secrets and endpoints. This separation also simplifies compliance reviews because sensitive data is never committed and every deployment documents exactly which secret source it depends on.
+
+---
